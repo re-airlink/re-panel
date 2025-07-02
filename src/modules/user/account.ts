@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { Module } from '../../handlers/moduleInit';
 import { PrismaClient } from '@prisma/client';
 import { isAuthenticated } from '../../handlers/utils/auth/authUtil';
@@ -39,14 +39,14 @@ const accountModule: Module = {
             res.render('user/account', { errorMessage, user, req });
             return;
           }
-
+          
           // Fetch login history
           const loginHistory = await prisma.loginHistory.findMany({
             where: { userId },
             orderBy: { timestamp: 'desc' },
             take: 10 // Limit to last 10 logins
           });
-
+          
           const settings = await prisma.settings.findUnique({
             where: { id: 1 },
           });
@@ -310,40 +310,6 @@ const accountModule: Module = {
         } catch (error) {
           logger.error('Error updating email:', error);
           res.status(500).json({ message: 'Internal Server Error' });
-        }
-      },
-    );
-
-    router.post(
-      '/set-language',
-      isAuthenticated(),
-      async (req: Request, res: Response) => {
-        const { language } = req.body;
-
-        if (!language) {
-          res.status(400).send('Language parameter is required.');
-          return;
-        }
-
-        // Validate language is supported
-        const supportedLanguages = ['en', 'fr'];
-        if (!supportedLanguages.includes(language)) {
-          res.status(400).send('Unsupported language.');
-          return;
-        }
-
-        try {
-          // Set the language cookie
-          res.cookie('lang', language, {
-            maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year
-            httpOnly: true,
-            sameSite: 'strict'
-          });
-
-          res.status(200).json({ message: 'Language preference saved.' });
-        } catch (error) {
-          logger.error('Error setting language preference:', error);
-          res.status(500).send('Internal Server Error');
         }
       },
     );

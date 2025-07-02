@@ -4,8 +4,6 @@ import { PrismaClient } from '@prisma/client';
 import { isAuthenticated } from '../../handlers/utils/auth/authUtil';
 import { checkNodeStatus } from '../../handlers/utils/node/nodeStatus';
 import logger from '../../handlers/logger';
-import axios from 'axios';
-import { Buffer } from 'buffer';
 
 const prisma = new PrismaClient();
 
@@ -20,7 +18,7 @@ function generateApiKey(length: number): string {
   return result;
 }
 
-type NodeWithInstances = {
+interface NodeWithInstance {
   id: number;
   name: string;
   ram: number;
@@ -30,11 +28,10 @@ type NodeWithInstances = {
   port: number;
   key: string;
   createdAt: Date;
-  instances: any[];
-  servers?: any[]; // For port allocation UI
+  instances: any;
 }
 
-async function listNodes(res: Response, includeServers = false) {
+async function listNodes(res: Response) {
   try {
     const nodes = await prisma.node.findMany();
     const nodesWithStatus = [];
@@ -42,22 +39,11 @@ async function listNodes(res: Response, includeServers = false) {
     for (const node of nodes) {
       const instances = await prisma.server.findMany({
         where: {
-          nodeId: node.id,
+          id: node.id,
         },
       });
-
-      // Create a node object with instances
-      const nodeWithInstances: NodeWithInstances = {
-        ...node,
-        instances: instances || []
-      };
-
-      // Add servers data if requested (for port allocation UI)
-      if (includeServers) {
-        nodeWithInstances.servers = instances;
-      }
-
-      nodesWithStatus.push(await checkNodeStatus(nodeWithInstances));
+      (node as NodeWithInstance).instances = instances || [];
+      nodesWithStatus.push(await checkNodeStatus(node));
     }
 
     return nodesWithStatus;
@@ -139,9 +125,8 @@ const adminModule: Module = {
     router.get(
       '/admin/nodes/list',
       isAuthenticated(true),
-      async (_req: Request, res: Response) => {
-        // Include servers data for port allocation UI
-        const listNode = await listNodes(res, true);
+      async (req: Request, res: Response) => {
+        const listNode = await listNodes(res);
         res.json(listNode);
       },
     );
@@ -328,19 +313,11 @@ const adminModule: Module = {
 
           const nodeId = parseInt(req.params.id);
 
-          // Get node with its servers for port allocation UI
-          const node = await prisma.node.findUnique({
-            where: { id: nodeId },
-            include: {
-              servers: true
-            }
-          });
-
+          const node = await prisma.node.findUnique({ where: { id: nodeId } });
           if (!node) {
             res.status(404).json({ message: 'Node not found.' });
             return;
           }
-
           const settings = await prisma.settings.findUnique({
             where: { id: 1 },
           });
@@ -372,7 +349,6 @@ const adminModule: Module = {
           const disk = parseInt(req.body.disk);
           const address = req.body.address;
           const port = parseInt(req.body.port);
-          const allocatedPorts = req.body.allocatedPorts || '[]';
 
           if (
             !name ||
@@ -389,26 +365,6 @@ const adminModule: Module = {
             return;
           }
 
-          // Validate allocated ports
-          try {
-            const parsedPorts = JSON.parse(allocatedPorts);
-            if (!Array.isArray(parsedPorts)) {
-              throw new Error('Allocated ports must be an array');
-            }
-
-            // Validate each port
-            for (const port of parsedPorts) {
-              if (typeof port !== 'number' || port < 1024 || port > 65535) {
-                throw new Error('Each port must be a number between 1024 and 65535');
-              }
-            }
-          } catch (error: any) {
-            res.status(400).json({
-              message: 'Invalid allocated ports format: ' + (error.message || 'Unknown error'),
-            });
-            return;
-          }
-
           const node = await prisma.node.update({
             where: { id: nodeId },
             data: {
@@ -418,7 +374,6 @@ const adminModule: Module = {
               disk,
               address,
               port,
-              allocatedPorts,
             },
           });
 
@@ -431,50 +386,6 @@ const adminModule: Module = {
         }
       },
     );
-
-    router.get(
-      '/admin/node/:id/stats',
-      isAuthenticated(true),
-      async (req: Request, res: Response) => {
-        const userId = req.session?.user?.id;
-        const user = await prisma.users.findUnique({ where: { id: userId } });
-        if (!user) {
-          return res.redirect('/login');
-        }
-
-        const nodeId = parseInt(req.params.id);
-
-        const node = await prisma.node.findUnique({ where: { id: nodeId } });
-        if (!node) {
-          res.status(404).json({ message: 'Node not found.' });
-          return;
-        }
-
-        const settings = await prisma.settings.findUnique({
-          where: { id: 1 },
-        });
-
-        let stats = {};
-
-        try {
-          const response = await axios.get(
-            `http://${node.address}:${node.port}/stats`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Basic ${Buffer.from(`Airlink:${node.key}`).toString('base64')}`,
-              },
-            }
-          );
-
-          stats = response.data;
-        } catch (_error) {
-          stats = { error: 'Unable to fetch stats from the node.' };
-        }
-        res.render('admin/nodes/stats', { node, user, req, settings, stats });
-      }
-    );
-
 
     return router;
   },

@@ -9,10 +9,10 @@
     <!-- Content -->
     <div class="flex-1 p-6 overflow-y-auto pt-16">
       <div class="sm:flex sm:items-center px-8 pt-4">
-        <%- include('../../components/pageTitle', {
-          title: req.translations.adminNodesTitle,
-          description: req.translations.adminNodesText
-        }) %>
+        <div class="sm:flex-auto">
+          <h1 class="text-base font-medium leading-6 text-neutral-800 dark:text-white"><%= req.translations.adminNodesTitle %></h1>
+          <p class="mt-1 tracking-tight text-sm text-neutral-500"><%= req.translations.adminNodesText %></p>
+        </div>
         <div class="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
           <div class="flex gap-2">
             <button id="createButton" type="button" class="border border-neutral-800/20 block rounded-xl bg-white hover:bg-neutral-200 dark:hover:bg-neutral-300 text-neutral-800 px-3 py-2 text-center text-sm font-medium shadow-lg transition duration-300 focus:outline focus:outline-2 focus:outline-offset-2">
@@ -21,9 +21,9 @@
           </div>
         </div>
       </div>
-
+      
       <div id="stats" class="grid grid-cols-1 md:grid-cols-2 gap-6 m-8">
-
+       
         <div class="bg-white/5 rounded-xl p-6 shadow-lg border border-neutral-800/20">
           <h2 class="text-lg font-medium text-neutral-800 dark:text-white mb-2"><%= req.translations.totalNodes %></h2>
           <p class="text-4xl font-normal text-neutral-800 dark:text-white"><%= nodes.length %></p>
@@ -36,12 +36,12 @@
         <div class="bg-white/5 rounded-xl p-6 shadow-lg border border-neutral-800/20">
           <h2 class="text-lg font-medium text-neutral-800 dark:text-white mb-2">Server Count</h2>
           <p class="text-4xl font-normal text-neutral-800 dark:text-white">
-            <%= nodes.reduce((total, node) => total + (node.instances ? node.instances.length : 0), 0) %>
+            <%= Object.values(instance.length).reduce((a, b) => a + b, 0) %>
           </p>
           <% if (instance.length > 0) { %>
             <p class="text-sm text-neutral-400 mt-2">
-              <%= req.translations.averageInstanceDensity %>:
-              <%= (nodes.reduce((total, node) => total + (node.instances ? node.instances.length : 0), 0) / nodes.length).toFixed(2) %>
+              <%= req.translations.averageInstanceDensity %>: 
+              <%= (Object.values(instance.length).reduce((a, b) => a + b, 0) / nodes.length).toFixed(2) %>
             </p>
           <% } else { %>
             <p class="text-sm text-neutral-400 mt-2"><%= req.translations.noInstancesAvailable %></p>
@@ -57,33 +57,11 @@
               <div class="flex-shrink-0 ml-1.5">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 mt-2 text-emerald-400">
                   <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
-                </svg>
+                </svg>                
               </div>
               <div class="ml-5">
                 <h3 class="text-sm font-medium text-emerald-400"><%= req.translations.success %>!</h3>
                 <p class="text-sm text-emerald-400/50"><%= req.translations.actionCompleted %></p>
-              </div>
-            </div>
-          </div>
-        </div>
-      <% } %>
-
-      <!-- Daemon offline warning -->
-      <% if (nodes.some(node => node.status === 'Offline')) { %>
-        <div class="mt-6 ml-8 mr-8">
-          <div class="rounded-xl bg-red-600/20 dark:bg-red-800/10 px-4 py-6 shadow-lg border border-neutral-800/20">
-            <div class="flex">
-              <div class="flex-shrink-0 ml-1.5">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mt-2 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div class="ml-5">
-                <h3 class="text-sm font-medium text-red-500 dark:text-red-400">Connection Error</h3>
-                <p class="text-sm text-red-500/70 dark:text-red-400/50">One or more nodes are offline. Some information may be unavailable.</p>
-                <button onclick="window.location.reload()" class="mt-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg transition-colors">
-                  Retry Connection
-                </button>
               </div>
             </div>
           </div>
@@ -113,13 +91,8 @@
                           <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                       <% } else if (node.status == "Offline") { %>
-                        <span class="flex h-2 w-2 group relative">
-                          <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                          <% if (node.error) { %>
-                            <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 -translate-y-1 w-48 bg-neutral-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10">
-                              <%= node.error %>
-                            </div>
-                          <% } %>
+                        <span class="flex h-2 w-2">
+                          <span class="relative inline-flex rounded-full h-2 w-2 bg-neutral-500"></span>
                         </span>
                       <% } else { %>
                         <span class="flex h-2 w-2">
@@ -132,8 +105,8 @@
                   </div>
                 </td>
                 <td class="whitespace-nowrap px-3 py-4 text-sm text-neutral-400"><%= node.address %>:<%= node.port %>
-                  <div class="mt-1 ml-2 inline-flex items-center rounded-md
-                  <%= node.versionRelease ? 'bg-emerald-600/10 text-emerald-400 ring-emerald-600/20' : 'bg-red-600/10 text-red-400 ring-red-600/20' %>
+                  <div class="mt-1 ml-2 inline-flex items-center rounded-md 
+                  <%= node.versionRelease ? 'bg-emerald-600/10 text-emerald-400 ring-emerald-600/20' : 'bg-red-600/10 text-red-400 ring-red-600/20' %> 
                   px-2 py-1 text-xs font-medium ring-1 ring-inset">
                     <%= node.versionRelease || 'unknown' %>
                   </div></td>

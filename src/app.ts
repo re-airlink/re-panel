@@ -1,7 +1,7 @@
 /**
  * ╳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╳
  *      AirLink - Open Source Project by AirlinkLabs
- *      Repository: https://github.com/airlinklabs/panel
+ *      Repository: https://github.com/airlinklabs/airlink
  *
  *     © 2024 AirlinkLabs. Licensed under the MIT License
  * ╳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╳
@@ -21,15 +21,10 @@ import compression from 'compression';
 import { translationMiddleware } from './handlers/utils/core/translation';
 import PrismaSessionStore from './handlers/sessionStore';
 import { settingsLoader } from './handlers/settingsLoader';
-import { loadAddons } from './handlers/addonHandler';
-import { initializeDefaultUIComponents, uiComponentStore } from './handlers/uiComponentHandler';
-import { startPlayerStatsCollection } from './handlers/playerStatsCollector';
-import { createPlayerStatsTable } from './handlers/createPlayerStatsTable';
+import { loadPlugins } from './handlers/pluginHandler';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
-import fs from 'fs';
-import csrfProtection, { handleCsrfError, addCsrfTokenToLocals } from './handlers/utils/security/csrfProtection';
 
 loadEnv();
 
@@ -48,45 +43,11 @@ expressWs(app);
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Load views
-const viewsPath = path.join(__dirname, '../views');
-app.set('views', viewsPath);
+app.set('views', path.join(__dirname, '../views'));
 app.set('view engine', 'ejs');
-
-const ejs = require('ejs');
-const originalRenderFile = ejs.renderFile;
-
-ejs.renderFile = function(file: string, data: any, options: any, callback: any) {
-  try {
-    if (fs.existsSync(file)) {
-      return originalRenderFile(file, data, options, callback);
-    }
-
-    const viewName = path.basename(file);
-    const addonViewsDir = path.join(__dirname, '../../storage/addons');
-
-    if (fs.existsSync(addonViewsDir)) {
-      const addonDirs = fs.readdirSync(addonViewsDir, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name);
-
-      for (const addonDir of addonDirs) {
-        const addonViewPath = path.join(addonViewsDir, addonDir, 'views', viewName);
-        if (fs.existsSync(addonViewPath)) {
-          return originalRenderFile(addonViewPath, data, options, callback);
-        }
-      }
-    }
-    const mainViewPath = path.join(viewsPath, viewName);
-    if (fs.existsSync(mainViewPath)) {
-      return originalRenderFile(mainViewPath, data, options, callback);
-    }
-
-    return originalRenderFile(file, data, options, callback);
-  } catch (error) {
-    console.error('Error in EJS renderFile override:', error);
-    return originalRenderFile(file, data, options, callback);
-  }
-};
+//app.set('view options', {
+//  compileDebug: process.env.NODE_ENV === 'development',
+//});
 
 // Load compression
 app.use(compression());
@@ -123,20 +84,9 @@ app.use(
   }),
 );
 
-app.use(express.json({
-  limit: '100mb'
-}));
-app.use(express.urlencoded({
-  extended: true,
-  limit: '100mb',
-  parameterLimit: 100000
-}));
-app.use(express.raw({
-  limit: '100mb'
-}));
-app.use(express.text({
-  limit: '100mb'
-}));
+// Load body parser
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
 // Load cookies
 app.use(cookieParser());
@@ -144,57 +94,20 @@ app.use(cookieParser());
 // Load translation
 app.use(translationMiddleware);
 
-// Apply CSRF protection to all routes except for API routes and WebSocket routes
+// Load locals
 app.use((req, res, next) => {
-  // Skip CSRF protection for WebSocket routes and API routes
-  if (req.path.startsWith('/ws') || req.path.startsWith('/api/')) {
-    return next();
-  }
-  csrfProtection(req, res, next);
-});
-
-// Handle CSRF errors
-app.use(handleCsrfError);
-
-// Add CSRF token to response locals for templates
-app.use(addCsrfTokenToLocals);
-
-interface SidebarItem {
-  id: string;
-  label: string;
-  link: string;
-}
-
-interface GlobalWithCustomProperties extends NodeJS.Global {
-  uiComponentStore: typeof import('./handlers/uiComponentHandler').uiComponentStore;
-  appName: string;
-  airlinkVersion: string;
-  adminMenuItems: SidebarItem[];
-  regularMenuItems: SidebarItem[];
-}
-
-declare const global: GlobalWithCustomProperties;
-
-
-app.use((_req, res, next) => {
   res.locals.name = name;
   res.locals.airlinkVersion = airlinkVersion;
-  global.uiComponentStore = uiComponentStore;
-  global.appName = name;
-  global.airlinkVersion = airlinkVersion;
-
-  res.locals.adminMenuItems = uiComponentStore.getSidebarItems(undefined, true);
-  res.locals.regularMenuItems = uiComponentStore.getSidebarItems(undefined, false);
   next();
 });
 
 // Load error handling
-app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   logger.error('Unhandled error:', err);
 
   if (!res.headersSent) {
     const errorMessage = isProduction ? 'Internal server error' : err.message;
-
+    
     res.status(500).json({
       error: errorMessage
     });
@@ -208,19 +121,14 @@ app.use((err: Error, _req: Request, res: Response, next: NextFunction) => {
   try {
     await databaseLoader();
     await settingsLoader();
-    // Initialize default UI components
-    initializeDefaultUIComponents();
-    await loadModules(app, airlinkVersion, Number(port));
-    await loadAddons(app);
-
+    await loadModules(app, airlinkVersion);
+    loadPlugins(app);
+    
     const server = app.listen(port, () => {
-      // Create PlayerStats table and start collection
-      createPlayerStatsTable().then(() => {
-        startPlayerStatsCollection();
-      });
+      logger.info(`Server is running on http://localhost:${port}`);
     });
-
-    // on close of the application
+    
+    // on close of the application 
     process.on('SIGINT', () => {
       logger.info('Shutting down...');
       // database close

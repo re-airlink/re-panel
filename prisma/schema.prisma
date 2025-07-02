@@ -15,9 +15,7 @@
     isAdmin     Boolean  @default(false)
     description String?  @default("No About Me")
     servers     Server[]
-    permissions String?
     loginHistory LoginHistory[]
-    apiKeys     ApiKey[]
   }
 
   model Session {
@@ -42,7 +40,6 @@
     Variables String?
     StartCommand String?
     dockerImage String?
-    allowStartupEdit Boolean @default(false)
     Installing Boolean @default(true)
     Queued   Boolean  @default(true)
     Suspended Boolean  @default(false)
@@ -73,17 +70,16 @@ model Images {
 }
 
   model Node {
-    id            Int      @id @default(autoincrement())
-    name          String
-    ram           Int      @default(0)
-    cpu           Int      @default(0)
-    disk          Int      @default(0)
-    address       String   @default("127.0.0.1")
-    port          Int      @default(3001)
-    key           String
-    createdAt     DateTime @default(now())
-    allocatedPorts String?  @default("[]") // JSON array of allocated ports
-    servers       Server[]
+    id        Int      @id @default(autoincrement())
+    name      String
+    ram       Int      @default(0)
+    cpu       Int      @default(0)
+    disk      Int      @default(0)
+    address   String   @default("127.0.0.1")
+    port      Int      @default(3001)
+    key       String
+    createdAt DateTime @default(now())
+    servers   Server[]
   }
 
 model settings {
@@ -99,16 +95,10 @@ model settings {
 }
 
 model ApiKey {
-  id          Int      @id @default(autoincrement())
-  name        String
-  key         String   @unique
-  description String?
-  permissions String   @default("[]")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  active      Boolean  @default(true)
-  userId      Int?
-  user        Users?   @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  createdAt DateTime @default(now())
+  active    Boolean  @default(true)
 }
 
 model LoginHistory {
@@ -118,28 +108,4 @@ model LoginHistory {
   ipAddress String?
   userAgent String?
   timestamp DateTime @default(now())
-}
-
-model PlayerStats {
-  id           Int      @id @default(autoincrement())
-  timestamp    DateTime @default(now())
-  totalPlayers Int      @default(0)
-  maxPlayers   Int      @default(0)
-  onlineServers Int     @default(0)
-  totalServers Int      @default(0)
-
-  @@index([timestamp])
-}
-
-model Addon {
-  id          Int      @id @default(autoincrement())
-  name        String
-  slug        String   @unique
-  description String?
-  version     String
-  author      String?
-  enabled     Boolean  @default(true)
-  mainFile    String   @default("index.ts")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }
